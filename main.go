@@ -3,6 +3,9 @@ package main
 import (
 	"log"
 	"net/http"
+
+	"github.com/lewisxin/bank-account-api/internal/handler"
+	"github.com/lewisxin/bank-account-api/internal/store"
 )
 
 func main() {
@@ -11,11 +14,9 @@ func main() {
 
 func newMux() *http.ServeMux {
 	mux := http.NewServeMux()
-	store := newAccountStore()
-	accounts := &accountHandler{store: store}
-	transfers := &transferHandler{store: store}
-	mux.HandleFunc("POST /account", accounts.createAccount)
-	mux.HandleFunc("POST /account/{id}/deposit", accounts.deposit)
-	mux.HandleFunc("POST /transfer", transfers.transfer)
+	accounts := handler.NewAccounts(store.NewAccounts())
+	mux.HandleFunc("POST /account", accounts.Create)
+	mux.HandleFunc("POST /account/{id}/deposit", accounts.Deposit)
+	mux.HandleFunc("POST /account/transfer", accounts.Transfer)
 	return mux
 }
