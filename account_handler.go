@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net/http"
+	"strconv"
 	"sync"
 )
 
@@ -19,6 +21,10 @@ type account struct {
 
 type createAccountRequest struct {
 	InitialBalanceCents int64 `json:"initial_balance_cents"`
+}
+
+type depositRequest struct {
+	AmountCents int64 `json:"amount_cents"`
 }
 
 type accountHandler struct {
@@ -69,4 +75,44 @@ func (h *accountHandler) addAccount(initialBalanceCents int64) account {
 	created := account{ID: h.nextID, BalanceCents: initialBalanceCents}
 	h.accounts[created.ID] = created
 	return created
+}
+
+func (h *accountHandler) deposit(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	var input depositRequest
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	var extra json.RawMessage
+
+	status := http.StatusBadRequest
+	var response any
+	switch {
+	case err != nil || id <= 0:
+		response = map[string]string{"error": "account ID must be a positive integer"}
+	case decoder.Decode(&input) != nil || input.AmountCents <= 0 || decoder.Decode(&extra) != io.EOF:
+		response = map[string]string{"error": "expected a JSON object with a positive integer amount_cents"}
+	default:
+		h.mu.Lock()
+		current, exists := h.accounts[id]
+		switch {
+		case !exists:
+			status = http.StatusNotFound
+			response = map[string]string{"error": "account not found"}
+		case input.AmountCents > math.MaxInt64-current.BalanceCents:
+			status = http.StatusConflict
+			response = map[string]string{"error": "deposit would exceed the maximum balance"}
+		default:
+			current.BalanceCents += input.AmountCents
+			h.accounts[id] = current
+			status = http.StatusOK
+			response = current
+		}
+		h.mu.Unlock()
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("write deposit response: %v", err)
+	}
 }

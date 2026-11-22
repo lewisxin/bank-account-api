@@ -134,3 +134,104 @@ func TestCreateAccountIncrementsID(t *testing.T) {
 		}
 	}
 }
+
+func TestDepositSuccess(t *testing.T) {
+	handler := &accountHandler{accounts: map[int64]account{1: {ID: 1, BalanceCents: 9500}}}
+	request := httptest.NewRequest(http.MethodPost, "/account/1/deposit", strings.NewReader(`{"amount_cents":1500}`))
+	request.SetPathValue("id", "1")
+	response := httptest.NewRecorder()
+	handler.deposit(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d, body = %s", response.Code, http.StatusOK, response.Body)
+	}
+	if body := strings.TrimSpace(response.Body.String()); body != `{"id":1,"balance_cents":11000}` {
+		t.Errorf("unexpected response: %s", body)
+	}
+	if balance := handler.accounts[1].BalanceCents; balance != 11000 {
+		t.Errorf("stored balance = %d, want 11000", balance)
+	}
+}
+
+func TestDepositErrors(t *testing.T) {
+	const invalidAmount = `{"error":"expected a JSON object with a positive integer amount_cents"}`
+
+	tests := []struct {
+		name           string
+		accountID      string
+		requestBody    string
+		expectedStatus int
+		expectedBody   string
+	}{
+		{
+			name:           "invalid account ID",
+			accountID:      "abc",
+			requestBody:    `{"amount_cents":100}`,
+			expectedStatus: http.StatusBadRequest,
+			expectedBody:   `{"error":"account ID must be a positive integer"}`,
+		},
+		{
+			name:           "zero amount",
+			accountID:      "1",
+			requestBody:    `{"amount_cents":0}`,
+			expectedStatus: http.StatusBadRequest,
+			expectedBody:   invalidAmount,
+		},
+		{
+			name:           "negative amount",
+			accountID:      "1",
+			requestBody:    `{"amount_cents":-100}`,
+			expectedStatus: http.StatusBadRequest,
+			expectedBody:   invalidAmount,
+		},
+		{
+			name:           "fractional cents",
+			accountID:      "1",
+			requestBody:    `{"amount_cents":0.5}`,
+			expectedStatus: http.StatusBadRequest,
+			expectedBody:   invalidAmount,
+		},
+		{
+			name:           "malformed JSON",
+			accountID:      "1",
+			requestBody:    `{"amount_cents":`,
+			expectedStatus: http.StatusBadRequest,
+			expectedBody:   invalidAmount,
+		},
+		{
+			name:           "account does not exist",
+			accountID:      "2",
+			requestBody:    `{"amount_cents":100}`,
+			expectedStatus: http.StatusNotFound,
+			expectedBody:   `{"error":"account not found"}`,
+		},
+		{
+			name:           "balance overflow",
+			accountID:      "1",
+			requestBody:    `{"amount_cents":9223372036854775807}`,
+			expectedStatus: http.StatusConflict,
+			expectedBody:   `{"error":"deposit would exceed the maximum balance"}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			initialBalance := int64(2500)
+			handler := &accountHandler{accounts: map[int64]account{1: {ID: 1, BalanceCents: initialBalance}}}
+			request := httptest.NewRequest(http.MethodPost, "/account/"+tt.accountID+"/deposit", strings.NewReader(tt.requestBody))
+			request.SetPathValue("id", tt.accountID)
+			response := httptest.NewRecorder()
+			handler.deposit(response, request)
+
+			if response.Code != tt.expectedStatus {
+				t.Fatalf("status = %d, want %d, body = %s", response.Code, tt.expectedStatus, response.Body)
+			}
+			if body := strings.TrimSpace(response.Body.String()); body != tt.expectedBody {
+				t.Errorf("body = %s, want %s", body, tt.expectedBody)
+			}
+			if balance := handler.accounts[1].BalanceCents; balance != initialBalance {
+				t.Errorf("stored balance = %d, want %d", balance, initialBalance)
+			}
+		})
+	}
+}

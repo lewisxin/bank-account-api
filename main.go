@@ -13,5 +13,6 @@ func newMux() *http.ServeMux {
 	mux := http.NewServeMux()
 	accounts := &accountHandler{accounts: make(map[int64]account)}
 	mux.HandleFunc("POST /account", accounts.createAccount)
+	mux.HandleFunc("POST /account/{id}/deposit", accounts.deposit)
 	return mux
 }
