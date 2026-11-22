@@ -70,11 +70,13 @@ make test
 
 ### Full Suite With PostgreSQL
 
+Run this from the project root with Docker Compose 2.24.4 or newer.
+
 ```sh
 make test-integration
 ```
 
-Compose starts the dedicated `test-db` service if needed and waits for it to be ready. The `integration` build tag includes the PostgreSQL tests alongside the unit tests. The PostgreSQL tests create temporary schemas in `bank_test`, apply their migrations, and drop the schemas during cleanup.
+Integration and E2E tests use the same PostgreSQL service definition. Each run starts its own database container in a disposable Compose project and removes its containers and volume on exit. The `integration` build tag runs the PostgreSQL tests alongside the unit tests. The PostgreSQL tests apply migrations in temporary schemas.
 
 ### End-to-End Tests
 

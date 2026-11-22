@@ -1,9 +1,0 @@
-services:
-  db:
-    ports: !reset []
-
-  bank-account-api:
-    image: bank-account-api:e2e
-    ports: !override
-      - target: 8080
-        host_ip: 127.0.0.1

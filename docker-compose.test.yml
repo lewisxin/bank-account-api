@@ -1,0 +1,22 @@
+services:
+  db:
+    ports: !reset []
+
+  bank-account-api:
+    image: bank-account-api:e2e
+    ports: !override
+      - target: 8080
+        host_ip: 127.0.0.1
+
+  test-integration:
+    image: golang:1.27.4-alpine
+    profiles: [tools]
+    working_dir: /src
+    environment:
+      TEST_DATABASE_URL: postgres://bank:bank@db:5432/bank?sslmode=disable
+    volumes:
+      - .:/src:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["go", "test", "-tags=integration", "-count=1", "./..."]

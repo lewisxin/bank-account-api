@@ -31,10 +31,13 @@ test:
 	$(GO) test ./...
 
 test-integration:
-	$(COMPOSE) run --rm -T test
+	@set -eu; \
+	. ./scripts/test-project.sh; \
+	prepare_test_project integration "$(COMPOSE)"; \
+	$$test_compose run --rm -T test-integration
 
 test-e2e:
-	sh e2e/run-e2e.sh "$(COMPOSE)" "$(POSTMAN)"
+	sh scripts/run-e2e.sh "$(COMPOSE)" "$(POSTMAN)"
 
 migrate-create:
 	@test -n "$$MIGRATION_NAME" || { printf '%s\n' 'Usage: make migrate-create MIGRATION_NAME=add_account_status' >&2; exit 1; }

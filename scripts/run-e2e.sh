@@ -8,24 +8,12 @@ if ! command -v "$postman_cli" >/dev/null; then
     exit 1
 fi
 
-run_dir=$(mktemp -d "${TMPDIR:-/tmp}/bank-account-api-e2e.XXXXXXXX")
-project=$(basename "$run_dir" | tr '[:upper:].' '[:lower:]-')
-compose="$compose_command --env-file /dev/null -p $project -f docker-compose.yml -f e2e/docker-compose.e2e.yml"
+. ./scripts/test-project.sh
+prepare_test_project e2e "$compose_command"
 export DATABASE_URL=
 
-cleanup() {
-    result=$?
-    trap - EXIT INT TERM
-    $compose down --volumes || result=1
-    rmdir "$run_dir" || result=1
-    exit "$result"
-}
-trap cleanup EXIT
-trap 'exit 130' INT
-trap 'exit 143' TERM
-
-make up COMPOSE="$compose" DATABASE_URL=
-address=$($compose port bank-account-api 8080)
+make up COMPOSE="$test_compose" DATABASE_URL=
+address=$($test_compose port bank-account-api 8080)
 
 # The account route answers GET with 405 once the server starts listening.
 status=$(curl --noproxy '*' --retry 5 --retry-connrefused --retry-delay 1 \
