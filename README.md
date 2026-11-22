@@ -131,7 +131,13 @@ Rolling back the initial migration drops the `accounts` table and its rows.
 - **R2**: Deposit money into an account.
 - **R3**: Transfer money between accounts atomically.
 - **R4**: Retrieve an account and its current balance by ID.
-- **R5**: All account balance are in cents to prevent floating-point rounding errors.
+
+## Technical Design Decisions
+
+- **Integer cents for monetary values**: Used integers in cents for account balances and transfer amounts to avoid floating-point rounding errors.
+- **PostgreSQL for transactional consistency**: Used database transactions to guarantee atomic transfers and row-level locking to protect account balances during concurrent operations.
+- **Consistent lock ordering**: Used consistent lock order by account ID to prevent deadlocks caused by concurrent transfers in opposite directions.
+- **Interface-based dependency injection**: Defined an account store interface to decouple HTTP handlers from PostgreSQL, enabling unit tests with mock implementations.
 
 ## Out of Scope
 
