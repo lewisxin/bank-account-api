@@ -132,6 +132,79 @@ func TestCreateAccountBadRequests(t *testing.T) {
 	}
 }
 
+func TestGetAccountSuccess(t *testing.T) {
+	mock := store.NewMockAccountStore(t)
+	mock.GetAccountFunc = func(id int64) (store.Account, error) {
+		if id != 42 {
+			t.Errorf("GetAccount(%d), want GetAccount(42)", id)
+		}
+		return store.Account{ID: 42, BalanceCents: 900}, nil
+	}
+	request := httptest.NewRequest(http.MethodGet, "/account/42", nil)
+	request.SetPathValue("id", "42")
+	response := httptest.NewRecorder()
+	NewAccounts(mock).Get(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", response.Code, http.StatusOK)
+	}
+	if body := strings.TrimSpace(response.Body.String()); body != `{"id":42,"balance_cents":900}` {
+		t.Errorf("unexpected response: %s", body)
+	}
+}
+
+func TestGetAccountErrors(t *testing.T) {
+	tests := []struct {
+		name         string
+		accountID    string
+		storeErr     error
+		expectedCode int
+		expectedBody string
+	}{
+		{
+			name:         "invalid account ID",
+			accountID:    "abc",
+			expectedCode: http.StatusBadRequest,
+			expectedBody: `{"error":"account ID must be a positive integer"}`,
+		},
+		{
+			name:         "account does not exist",
+			accountID:    "42",
+			storeErr:     store.ErrAccountNotFound,
+			expectedCode: http.StatusNotFound,
+			expectedBody: `{"error":"account not found"}`,
+		},
+		{
+			name:         "database unavailable",
+			accountID:    "42",
+			storeErr:     errors.New("database unavailable"),
+			expectedCode: http.StatusInternalServerError,
+			expectedBody: `{"error":"internal server error"}`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mock := store.NewMockAccountStore(t)
+			if tt.storeErr != nil {
+				mock.GetAccountFunc = func(int64) (store.Account, error) {
+					return store.Account{}, tt.storeErr
+				}
+			}
+			request := httptest.NewRequest(http.MethodGet, "/account/"+tt.accountID, nil)
+			request.SetPathValue("id", tt.accountID)
+			response := httptest.NewRecorder()
+			NewAccounts(mock).Get(response, request)
+
+			if response.Code != tt.expectedCode {
+				t.Errorf("status = %d, want %d", response.Code, tt.expectedCode)
+			}
+			if body := strings.TrimSpace(response.Body.String()); body != tt.expectedBody {
+				t.Errorf("body = %s, want %s", body, tt.expectedBody)
+			}
+		})
+	}
+}
+
 func TestDepositSuccess(t *testing.T) {
 	mock := store.NewMockAccountStore(t)
 	mock.DepositFunc = func(id, amountCents int64) (store.Account, error) {

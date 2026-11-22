@@ -51,6 +51,7 @@ func newMux(accountStore handler.AccountStore) *http.ServeMux {
 	mux := http.NewServeMux()
 	accounts := handler.NewAccounts(accountStore)
 	mux.HandleFunc("POST /account", accounts.Create)
+	mux.HandleFunc("GET /account/{id}", accounts.Get)
 	mux.HandleFunc("POST /account/{id}/deposit", accounts.Deposit)
 	mux.HandleFunc("POST /account/transfer", accounts.Transfer)
 	return mux

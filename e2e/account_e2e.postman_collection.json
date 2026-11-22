@@ -177,7 +177,7 @@
                 }
               }
             },
-            "description": "Try to deposit -100 cents into the account with 1500 cents. Expect HTTP 400 and the error requiring a positive deposit amount."
+            "description": "Try to deposit -100 cents into the account with 1500 cents. Expect HTTP 400 and the error requiring a positive deposit amount. The funded account still has 1500 cents."
           },
           "event": [
             {
@@ -254,7 +254,7 @@
                 }
               }
             },
-            "description": "Try to transfer 901 cents from the account with 900 cents. Expect HTTP 409 with an insufficient funds error."
+            "description": "Try to transfer 901 cents from the account with 900 cents. Expect HTTP 409 with an insufficient funds error. The source and destination balances are still 900 and 600 cents, respectively."
           },
           "event": [
             {
@@ -291,7 +291,7 @@
                 }
               }
             },
-            "description": "Try to transfer 1 cent from an account to itself. Expect HTTP 400 with the error requiring distinct account IDs."
+            "description": "Try to transfer 1 cent from an account to itself. Expect HTTP 400 with the error requiring distinct account IDs. The funded and recipient accounts still have 900 and 600 cents, respectively."
           },
           "event": [
             {
@@ -307,6 +307,48 @@
               }
             }
           ]
+        }
+      ],
+      "description": "Check each operation's HTTP response and use GET /account/{id} to verify the persisted balances of the affected accounts.",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const expectedBalancesByRequest = {",
+              "    \"Open an account without a balance\": { createdAccount: 0 },",
+              "    \"Open an account with an initial balance\": { createdAccount: 1000 },",
+              "    \"Reject a negative initial balance\": {},",
+              "    \"Deposit money\": { fundedAccountId: 1500 },",
+              "    \"Reject a negative deposit\": { fundedAccountId: 1500 },",
+              "    \"Transfer with sufficient funds\": { fundedAccountId: 900, emptyAccountId: 600 },",
+              "    \"Reject a transfer with insufficient funds\": { fundedAccountId: 900, emptyAccountId: 600 },",
+              "    \"Reject a transfer to the same account\": { fundedAccountId: 900, emptyAccountId: 600 }",
+              "};",
+              "const accountLabels = {",
+              "    createdAccount: \"New account\",",
+              "    fundedAccountId: \"Funded account\",",
+              "    emptyAccountId: \"Recipient account\"",
+              "};",
+              "",
+              "const expectedBalances = expectedBalancesByRequest[pm.info.requestName];",
+              "for (const [account, balanceCents] of Object.entries(expectedBalances)) {",
+              "    const label = accountLabels[account];",
+              "    const id = account === \"createdAccount\" ? pm.response.json().id : Number(pm.variables.get(account));",
+              "    pm.expect(Number.isSafeInteger(id) && id > 0, label + \" ID is a positive integer\").to.equal(true);",
+              "",
+              "    const response = await pm.sendRequest({",
+              "        url: pm.variables.get(\"baseUrl\") + \"/account/\" + id,",
+              "        method: \"GET\"",
+              "    });",
+              "    pm.test(label + \" has a stored balance of \" + balanceCents + \" cents\", () => {",
+              "        pm.expect(response.code).to.equal(200);",
+              "        pm.expect(response.json()).to.deep.equal({ id, balance_cents: balanceCents });",
+              "    });",
+              "}"
+            ]
+          }
         }
       ]
     },
@@ -419,11 +461,11 @@
               "        });",
               "    });",
               "",
-              "    // A one-cent deposit returns the stored balance plus the deposit.",
               "    const labels = Object.keys(accounts);",
-              "    const balanceResponses = await Promise.all(labels.map(label =>",
-              "        post(\"/account/\" + accounts[label].id + \"/deposit\", { amount_cents: 1 })",
-              "    ));",
+              "    const balanceResponses = await Promise.all(labels.map(label => pm.sendRequest({",
+              "        url: pm.variables.get(\"baseUrl\") + \"/account/\" + accounts[label].id,",
+              "        method: \"GET\"",
+              "    })));",
               "    const expected = formatBalances(expectedBalances);",
               "    pm.test(\"After HTTP \" + statuses.replace(\",\", \"/\") + \", persisted balances are \" + expected + \" cents\", () => {",
               "        const balances = {};",
@@ -432,7 +474,7 @@
               "            pm.expect(response.code, \"read balance for \" + label).to.equal(200);",
               "            const account = response.json();",
               "            pm.expect(account.id).to.equal(accounts[label].id);",
-              "            balances[label] = account.balance_cents - 1;",
+              "            balances[label] = account.balance_cents;",
               "        });",
               "        pm.expect(balances, \"persisted balances in cents\").to.deep.equal(expectedBalances);",
               "    });",

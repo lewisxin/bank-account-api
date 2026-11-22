@@ -100,6 +100,18 @@ func TestPostgresAddAccount(t *testing.T) {
 	}
 }
 
+func TestPostgresGetAccount(t *testing.T) {
+	accounts := NewPostgresAccounts(openTestPostgres(t))
+	created := addTestAccount(t, accounts, 900)
+	got, err := accounts.GetAccount(t.Context(), created.ID)
+	if err != nil || got != created {
+		t.Fatalf("GetAccount(%d) = %+v, %v; want %+v", created.ID, got, err, created)
+	}
+	if _, err := accounts.GetAccount(t.Context(), created.ID+1); !errors.Is(err, ErrAccountNotFound) {
+		t.Errorf("get missing account: %v, want %v", err, ErrAccountNotFound)
+	}
+}
+
 func TestPostgresDeposit(t *testing.T) {
 	db := openTestPostgres(t)
 	accounts := NewPostgresAccounts(db)

@@ -84,12 +84,13 @@ With Docker Compose 2.24.4 or newer, `curl`, and the Postman CLI installed, run 
 make test-e2e
 ```
 
-Each run builds the API image, starts a fresh PostgreSQL container, applies migrations, and starts the server on a temporary local port. It runs the [account workflow collection](tests/account_e2e.postman_collection.json), then removes the E2E containers and their database data, even if a test fails. Run the same command again for a clean database.
+Each run builds the API image, starts a fresh PostgreSQL container, applies migrations, and starts the server on a temporary local port. It runs the [account workflow collection](e2e/account_e2e.postman_collection.json), then removes the E2E containers and their database data, even if a test fails. Run the same command again for a clean database.
 
-The concurrent cases use one-cent deposits to read back the final balances through the API and account for those deposits in the assertions.
+The collection uses `GET /account/{id}` to verify stored balances after account creation, deposits, and transfers. It also checks that rejected deposits and transfers leave the balances intact.
 
 ## Functional Requirements
 
-- R1: Create an account with or without an initial balance
-- R2: Deposit money to an account
-- R3: Transfer money between accounts
+- **R1** Create an account with an optional initial balance.
+- **R2** Deposit money into an account.
+- **R3** Transfer money between accounts atomically.
+- **R4** Retrieve an account and its current balance by ID.

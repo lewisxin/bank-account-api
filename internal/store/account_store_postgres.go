@@ -29,6 +29,19 @@ func (s *PostgresAccounts) AddAccount(ctx context.Context, initialBalanceCents i
 	return created, nil
 }
 
+func (s *PostgresAccounts) GetAccount(ctx context.Context, id int64) (Account, error) {
+	var account Account
+	err := s.db.QueryRowContext(ctx, `SELECT id, balance_cents FROM accounts WHERE id = $1`, id).
+		Scan(&account.ID, &account.BalanceCents)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Account{}, ErrAccountNotFound
+	}
+	if err != nil {
+		return Account{}, fmt.Errorf("select account: %w", err)
+	}
+	return account, nil
+}
+
 func (s *PostgresAccounts) Deposit(ctx context.Context, id, amountCents int64) (Account, error) {
 	if amountCents <= 0 {
 		return Account{}, ErrInvalidDepositAmount

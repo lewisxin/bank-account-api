@@ -36,6 +36,7 @@ type transferResponse struct {
 
 type AccountStore interface {
 	AddAccount(ctx context.Context, initialBalanceCents int64) (store.Account, error)
+	GetAccount(ctx context.Context, id int64) (store.Account, error)
 	Deposit(ctx context.Context, id, amountCents int64) (store.Account, error)
 	Transfer(ctx context.Context, fromID, toID, amountCents int64) (store.Account, store.Account, error)
 }
@@ -86,6 +87,37 @@ func (h *Accounts) Create(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		log.Printf("write account response: %v", err)
+	}
+}
+
+func (h *Accounts) Get(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+
+	var status int
+	var response any
+	if err != nil || id <= 0 {
+		status = http.StatusBadRequest
+		response = map[string]string{"error": "account ID must be a positive integer"}
+	} else {
+		account, err := h.store.GetAccount(r.Context(), id)
+		switch err {
+		case nil:
+			status = http.StatusOK
+			response = account
+		case store.ErrAccountNotFound:
+			status = http.StatusNotFound
+			response = map[string]string{"error": err.Error()}
+		default:
+			log.Printf("get account: %v", err)
+			status = http.StatusInternalServerError
+			response = map[string]string{"error": "internal server error"}
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("write get account response: %v", err)
 	}
 }
 

@@ -13,6 +13,7 @@ type mockTestReporter interface {
 type MockAccountStore struct {
 	t              mockTestReporter
 	AddAccountFunc func(initialBalanceCents int64) (Account, error)
+	GetAccountFunc func(id int64) (Account, error)
 	DepositFunc    func(id, amountCents int64) (Account, error)
 	TransferFunc   func(fromID, toID, amountCents int64) (Account, Account, error)
 }
@@ -23,6 +24,9 @@ func NewMockAccountStore(t mockTestReporter) *MockAccountStore {
 	t.Cleanup(func() {
 		if mock.AddAccountFunc != nil {
 			t.Error("expected one call to AddAccount")
+		}
+		if mock.GetAccountFunc != nil {
+			t.Error("expected one call to GetAccount")
 		}
 		if mock.DepositFunc != nil {
 			t.Error("expected one call to Deposit")
@@ -42,6 +46,16 @@ func (m *MockAccountStore) AddAccount(_ context.Context, initialBalanceCents int
 	}
 	m.AddAccountFunc = nil
 	return call(initialBalanceCents)
+}
+
+func (m *MockAccountStore) GetAccount(_ context.Context, id int64) (Account, error) {
+	m.t.Helper()
+	call := m.GetAccountFunc
+	if call == nil {
+		m.t.Fatalf("unexpected GetAccount(%d)", id)
+	}
+	m.GetAccountFunc = nil
+	return call(id)
 }
 
 func (m *MockAccountStore) Deposit(_ context.Context, id, amountCents int64) (Account, error) {

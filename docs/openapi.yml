@@ -3,7 +3,7 @@ info:
   title: Bank Account API
   version: 0.1.0
   description: |
-    Create accounts, deposit money, and transfer money between accounts.
+    Create accounts, look up balances, deposit money, and transfer money between accounts.
     All amounts and balances are expressed in whole cents.
 servers:
   - url: http://127.0.0.1:8080
@@ -53,6 +53,39 @@ paths:
                 invalidBalance:
                   value:
                     error: initial_balance_cents must be an integer between 0 and 10000
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /account/{id}:
+    get:
+      operationId: getAccount
+      summary: Get an account and its current balance
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The ID returned when the account was created.
+          schema:
+            $ref: '#/components/schemas/AccountID'
+      responses:
+        '200':
+          description: The account and its current balance.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+              example:
+                id: 1
+                balance_cents: 900
+        '400':
+          description: Invalid account ID.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: account ID must be a positive integer
+        '404':
+          $ref: '#/components/responses/AccountNotFound'
         '500':
           $ref: '#/components/responses/InternalServerError'
   /account/{id}/deposit:
