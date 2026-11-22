@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -13,8 +12,6 @@ import (
 	"github.com/lewisxin/bank-account-api/internal/middleware"
 	"github.com/lewisxin/bank-account-api/internal/store"
 )
-
-const maxInitialBalanceCents = 10_000
 
 type createAccountRequest struct {
 	InitialBalanceCents int64 `json:"initial_balance_cents"`
@@ -70,8 +67,8 @@ func (h *Accounts) Create(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case !validBody:
 		response = map[string]string{"error": "expected a JSON object with an optional integer initial_balance_cents"}
-	case invalidBalanceValue || input.InitialBalanceCents < 0 || input.InitialBalanceCents > maxInitialBalanceCents:
-		response = map[string]string{"error": fmt.Sprintf("initial_balance_cents must be an integer between 0 and %d", maxInitialBalanceCents)}
+	case invalidBalanceValue || input.InitialBalanceCents < 0:
+		response = map[string]string{"error": "initial_balance_cents must be a non-negative 64-bit integer"}
 	default:
 		created, err := h.store.AddAccount(r.Context(), input.InitialBalanceCents)
 		if err != nil {

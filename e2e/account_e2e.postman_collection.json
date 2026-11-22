@@ -100,7 +100,7 @@
                 }
               }
             },
-            "description": "Try to open an account with an initial balance of -100 cents. Expect HTTP 400 and the error for a balance outside the allowed range of 0 to 10000 cents."
+            "description": "Try to open an account with an initial balance of -100 cents. Expect HTTP 400 and the error requiring a non-negative integer balance."
           },
           "event": [
             {
@@ -108,9 +108,9 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"An initial balance of -100 cents returns HTTP 400 with the 0 to 10000 cents validation error\", () => {",
+                  "pm.test(\"An initial balance of -100 cents returns HTTP 400 with the non-negative balance error\", () => {",
                   "    pm.response.to.have.status(400);",
-                  "    pm.expect(pm.response.json()).to.deep.equal({ error: \"initial_balance_cents must be an integer between 0 and 10000\" });",
+                  "    pm.expect(pm.response.json()).to.deep.equal({ error: \"initial_balance_cents must be a non-negative 64-bit integer\" });",
                   "});"
                 ]
               }

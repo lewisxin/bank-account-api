@@ -26,7 +26,6 @@ paths:
                   type: integer
                   format: int64
                   minimum: 0
-                  maximum: 10000
                   default: 0
             example:
               initial_balance_cents: 1000
@@ -52,7 +51,7 @@ paths:
                     error: expected a JSON object with an optional integer initial_balance_cents
                 invalidBalance:
                   value:
-                    error: initial_balance_cents must be an integer between 0 and 10000
+                    error: initial_balance_cents must be a non-negative 64-bit integer
         '500':
           $ref: '#/components/responses/InternalServerError'
   /account/{id}:

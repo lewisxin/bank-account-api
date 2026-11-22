@@ -28,11 +28,6 @@ func TestCreateAccountSuccess(t *testing.T) {
 			expectedBalanceCents: 0,
 		},
 		{
-			name:                 "at maximum balance",
-			requestBody:          `{"initial_balance_cents":10000}`,
-			expectedBalanceCents: 10000,
-		},
-		{
 			name:                 "without initial balance",
 			requestBody:          `{}`,
 			expectedBalanceCents: 0,
@@ -83,7 +78,7 @@ func TestCreateAccountStoreError(t *testing.T) {
 }
 
 func TestCreateAccountBadRequests(t *testing.T) {
-	const invalidBalance = `{"error":"initial_balance_cents must be an integer between 0 and 10000"}`
+	const invalidBalance = `{"error":"initial_balance_cents must be a non-negative 64-bit integer"}`
 	const invalidRequest = `{"error":"expected a JSON object with an optional integer initial_balance_cents"}`
 
 	tests := []struct {
@@ -94,11 +89,6 @@ func TestCreateAccountBadRequests(t *testing.T) {
 		{
 			name:         "negative balance",
 			requestBody:  `{"initial_balance_cents":-1}`,
-			expectedBody: invalidBalance,
-		},
-		{
-			name:         "above maximum balance",
-			requestBody:  `{"initial_balance_cents":10001}`,
 			expectedBody: invalidBalance,
 		},
 		{
