@@ -222,36 +222,42 @@ func TestDepositErrors(t *testing.T) {
 		accountID    string
 		requestBody  string
 		storeErr     error
+		expectedCode int
 		expectedBody string
 	}{
 		{
 			name:         "invalid account ID",
 			accountID:    "abc",
 			requestBody:  `{"amount_cents":100}`,
+			expectedCode: http.StatusBadRequest,
 			expectedBody: `{"error":"account ID must be a positive integer"}`,
 		},
 		{
 			name:         "zero amount",
 			accountID:    "1",
 			requestBody:  `{"amount_cents":0}`,
+			expectedCode: http.StatusBadRequest,
 			expectedBody: invalidAmount,
 		},
 		{
 			name:         "negative amount",
 			accountID:    "1",
 			requestBody:  `{"amount_cents":-100}`,
+			expectedCode: http.StatusBadRequest,
 			expectedBody: invalidAmount,
 		},
 		{
 			name:         "fractional cents",
 			accountID:    "1",
 			requestBody:  `{"amount_cents":0.5}`,
+			expectedCode: http.StatusBadRequest,
 			expectedBody: invalidAmount,
 		},
 		{
 			name:         "malformed JSON",
 			accountID:    "1",
 			requestBody:  `{"amount_cents":`,
+			expectedCode: http.StatusBadRequest,
 			expectedBody: invalidAmount,
 		},
 		{
@@ -259,6 +265,7 @@ func TestDepositErrors(t *testing.T) {
 			accountID:    "2",
 			requestBody:  `{"amount_cents":100}`,
 			storeErr:     store.ErrAccountNotFound,
+			expectedCode: http.StatusNotFound,
 			expectedBody: `{"error":"account not found"}`,
 		},
 		{
@@ -266,6 +273,7 @@ func TestDepositErrors(t *testing.T) {
 			accountID:    "1",
 			requestBody:  `{"amount_cents":100}`,
 			storeErr:     store.ErrBalanceOverflow,
+			expectedCode: http.StatusConflict,
 			expectedBody: `{"error":"deposit would exceed the maximum balance"}`,
 		},
 	}
@@ -284,6 +292,9 @@ func TestDepositErrors(t *testing.T) {
 			response := httptest.NewRecorder()
 			handler.Deposit(response, request)
 
+			if response.Code != tt.expectedCode {
+				t.Errorf("status = %d, want %d", response.Code, tt.expectedCode)
+			}
 			if body := strings.TrimSpace(response.Body.String()); body != tt.expectedBody {
 				t.Errorf("body = %s, want %s", body, tt.expectedBody)
 			}
@@ -318,41 +329,48 @@ func TestTransferErrors(t *testing.T) {
 		name         string
 		requestBody  string
 		storeErr     error
+		expectedCode int
 		expectedBody string
 	}{
 		{
 			name:         "same account",
 			requestBody:  `{"from_account_id":1,"to_account_id":1,"amount_cents":100}`,
 			storeErr:     store.ErrInvalidTransferAccounts,
+			expectedCode: http.StatusBadRequest,
 			expectedBody: `{"error":"from_account_id and to_account_id must be distinct positive integers"}`,
 		},
 		{
 			name:         "non-positive amount",
 			requestBody:  `{"from_account_id":1,"to_account_id":2,"amount_cents":0}`,
 			storeErr:     store.ErrInvalidTransferAmount,
+			expectedCode: http.StatusBadRequest,
 			expectedBody: `{"error":"amount_cents must be a positive integer"}`,
 		},
 		{
 			name:         "fractional cents",
 			requestBody:  `{"from_account_id":1,"to_account_id":2,"amount_cents":0.5}`,
+			expectedCode: http.StatusBadRequest,
 			expectedBody: invalidRequest,
 		},
 		{
 			name:         "missing destination account",
 			requestBody:  `{"from_account_id":1,"to_account_id":3,"amount_cents":100}`,
 			storeErr:     store.ErrAccountNotFound,
+			expectedCode: http.StatusNotFound,
 			expectedBody: `{"error":"account not found"}`,
 		},
 		{
 			name:         "insufficient funds",
 			requestBody:  `{"from_account_id":1,"to_account_id":2,"amount_cents":1001}`,
 			storeErr:     store.ErrInsufficientFunds,
+			expectedCode: http.StatusConflict,
 			expectedBody: `{"error":"insufficient funds"}`,
 		},
 		{
 			name:         "destination balance overflow",
 			requestBody:  `{"from_account_id":1,"to_account_id":2,"amount_cents":100}`,
 			storeErr:     store.ErrBalanceOverflow,
+			expectedCode: http.StatusConflict,
 			expectedBody: `{"error":"transfer would exceed the destination's maximum balance"}`,
 		},
 	}
@@ -370,6 +388,9 @@ func TestTransferErrors(t *testing.T) {
 			response := httptest.NewRecorder()
 			handler.Transfer(response, request)
 
+			if response.Code != tt.expectedCode {
+				t.Errorf("status = %d, want %d", response.Code, tt.expectedCode)
+			}
 			if body := strings.TrimSpace(response.Body.String()); body != tt.expectedBody {
 				t.Errorf("body = %s, want %s", body, tt.expectedBody)
 			}
