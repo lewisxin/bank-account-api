@@ -1,0 +1,5 @@
+.git
+.env
+.env.*
+bank-account-api
+**/*_test.go

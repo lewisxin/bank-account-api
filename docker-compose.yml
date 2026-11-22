@@ -1,7 +1,63 @@
+x-database-url: &database-url "${DATABASE_URL:-postgres://bank:bank@db:5432/bank?sslmode=disable}"
+
 services:
   db:
-    image: postgres:17.12-alpine
+    image: &postgres-image postgres:17.12-alpine
+    ports:
+      - "127.0.0.1:5432:5432"
     environment:
       POSTGRES_DB: bank
       POSTGRES_USER: bank
       POSTGRES_PASSWORD: bank
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "bank", "-d", "bank"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  bank-account-api:
+    build: .
+    image: bank-account-api:local
+    environment:
+      DATABASE_URL: *database-url
+    ports:
+      - 8080:8080
+    depends_on:
+      db:
+        condition: service_healthy
+
+  migrate:
+    image: migrate/migrate:v4.19.1
+    profiles: [tools]
+    entrypoint: ["migrate", "-path", "/migrations", "-database", *database-url]
+    volumes:
+      - ./migrations:/migrations:ro
+    depends_on:
+      db:
+        condition: service_healthy
+
+  test-db:
+    image: *postgres-image
+    profiles: [tools]
+    environment:
+      POSTGRES_DB: bank_test
+      POSTGRES_USER: bank_test
+      POSTGRES_PASSWORD: bank_test
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "bank_test", "-d", "bank_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  test:
+    image: golang:1.27.4-alpine
+    profiles: [tools]
+    working_dir: /src
+    environment:
+      TEST_DATABASE_URL: postgres://bank_test:bank_test@test-db:5432/bank_test?sslmode=disable
+    volumes:
+      - .:/src:ro
+    depends_on:
+      test-db:
+        condition: service_healthy
+    command: ["go", "test", "-tags=integration", "-count=1", "./..."]

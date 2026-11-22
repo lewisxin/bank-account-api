@@ -40,7 +40,11 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("connect to PostgreSQL: %w", err)
 	}
-	return http.ListenAndServe("127.0.0.1:8080", newMux(store.NewPostgresAccounts(db)))
+	addr := os.Getenv("APP_HOST")
+	if addr == "" {
+		addr = "127.0.0.1:8080"
+	}
+	return http.ListenAndServe(addr, newMux(store.NewPostgresAccounts(db)))
 }
 
 func newMux(accountStore handler.AccountStore) *http.ServeMux {
