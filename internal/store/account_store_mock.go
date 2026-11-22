@@ -1,5 +1,7 @@
 package store
 
+import "context"
+
 type mockTestReporter interface {
 	Cleanup(func())
 	Error(args ...any)
@@ -10,7 +12,7 @@ type mockTestReporter interface {
 // MockAccountStore expects one call to each configured function.
 type MockAccountStore struct {
 	t              mockTestReporter
-	AddAccountFunc func(initialBalanceCents int64) Account
+	AddAccountFunc func(initialBalanceCents int64) (Account, error)
 	DepositFunc    func(id, amountCents int64) (Account, error)
 	TransferFunc   func(fromID, toID, amountCents int64) (Account, Account, error)
 }
@@ -32,7 +34,7 @@ func NewMockAccountStore(t mockTestReporter) *MockAccountStore {
 	return mock
 }
 
-func (m *MockAccountStore) AddAccount(initialBalanceCents int64) Account {
+func (m *MockAccountStore) AddAccount(_ context.Context, initialBalanceCents int64) (Account, error) {
 	m.t.Helper()
 	call := m.AddAccountFunc
 	if call == nil {
@@ -42,7 +44,7 @@ func (m *MockAccountStore) AddAccount(initialBalanceCents int64) Account {
 	return call(initialBalanceCents)
 }
 
-func (m *MockAccountStore) Deposit(id, amountCents int64) (Account, error) {
+func (m *MockAccountStore) Deposit(_ context.Context, id, amountCents int64) (Account, error) {
 	m.t.Helper()
 	call := m.DepositFunc
 	if call == nil {
@@ -52,7 +54,7 @@ func (m *MockAccountStore) Deposit(id, amountCents int64) (Account, error) {
 	return call(id, amountCents)
 }
 
-func (m *MockAccountStore) Transfer(fromID, toID, amountCents int64) (Account, Account, error) {
+func (m *MockAccountStore) Transfer(_ context.Context, fromID, toID, amountCents int64) (Account, Account, error) {
 	m.t.Helper()
 	call := m.TransferFunc
 	if call == nil {

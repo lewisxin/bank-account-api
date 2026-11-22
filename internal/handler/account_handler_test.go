@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -46,11 +47,11 @@ func TestCreateAccountSuccess(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mock := store.NewMockAccountStore(t)
-			mock.AddAccountFunc = func(initialBalanceCents int64) store.Account {
+			mock.AddAccountFunc = func(initialBalanceCents int64) (store.Account, error) {
 				if initialBalanceCents != tt.expectedBalanceCents {
 					t.Errorf("AddAccount(%d), want AddAccount(%d)", initialBalanceCents, tt.expectedBalanceCents)
 				}
-				return store.Account{ID: 1, BalanceCents: tt.expectedBalanceCents}
+				return store.Account{ID: 1, BalanceCents: tt.expectedBalanceCents}, nil
 			}
 			handler := NewAccounts(mock)
 			request := httptest.NewRequest(http.MethodPost, "/account", strings.NewReader(tt.requestBody))
@@ -63,6 +64,21 @@ func TestCreateAccountSuccess(t *testing.T) {
 				t.Errorf("body = %s, want field %s", body, want)
 			}
 		})
+	}
+}
+
+func TestCreateAccountStoreError(t *testing.T) {
+	mock := store.NewMockAccountStore(t)
+	mock.AddAccountFunc = func(int64) (store.Account, error) {
+		return store.Account{}, errors.New("database unavailable")
+	}
+	handler := NewAccounts(mock)
+	request := httptest.NewRequest(http.MethodPost, "/account", strings.NewReader(`{}`))
+	response := httptest.NewRecorder()
+	handler.Create(response, request)
+
+	if body := strings.TrimSpace(response.Body.String()); body != `{"error":"internal server error"}` {
+		t.Errorf("unexpected response: %s", body)
 	}
 }
 

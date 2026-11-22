@@ -1,0 +1,4 @@
+CREATE TABLE accounts (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    balance_cents BIGINT NOT NULL DEFAULT 0 CHECK (balance_cents >= 0)
+);

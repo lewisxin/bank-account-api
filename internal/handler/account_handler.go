@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -34,9 +35,9 @@ type transferResponse struct {
 }
 
 type AccountStore interface {
-	AddAccount(initialBalanceCents int64) store.Account
-	Deposit(id, amountCents int64) (store.Account, error)
-	Transfer(fromID, toID, amountCents int64) (store.Account, store.Account, error)
+	AddAccount(ctx context.Context, initialBalanceCents int64) (store.Account, error)
+	Deposit(ctx context.Context, id, amountCents int64) (store.Account, error)
+	Transfer(ctx context.Context, fromID, toID, amountCents int64) (store.Account, store.Account, error)
 }
 
 type Accounts struct {
@@ -70,8 +71,15 @@ func (h *Accounts) Create(w http.ResponseWriter, r *http.Request) {
 	case invalidBalanceValue || input.InitialBalanceCents < 0 || input.InitialBalanceCents > maxInitialBalanceCents:
 		response = map[string]string{"error": fmt.Sprintf("initial_balance_cents must be an integer between 0 and %d", maxInitialBalanceCents)}
 	default:
-		status = http.StatusCreated
-		response = h.store.AddAccount(input.InitialBalanceCents)
+		created, err := h.store.AddAccount(r.Context(), input.InitialBalanceCents)
+		if err != nil {
+			log.Printf("create account: %v", err)
+			status = http.StatusInternalServerError
+			response = map[string]string{"error": "internal server error"}
+		} else {
+			status = http.StatusCreated
+			response = created
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -96,7 +104,7 @@ func (h *Accounts) Deposit(w http.ResponseWriter, r *http.Request) {
 	case decoder.Decode(&input) != nil || input.AmountCents <= 0 || decoder.Decode(&extra) != io.EOF:
 		response = map[string]string{"error": "expected a JSON object with a positive integer amount_cents"}
 	default:
-		updated, err := h.store.Deposit(id, input.AmountCents)
+		updated, err := h.store.Deposit(r.Context(), id, input.AmountCents)
 		switch err {
 		case store.ErrAccountNotFound:
 			status = http.StatusNotFound
@@ -107,6 +115,10 @@ func (h *Accounts) Deposit(w http.ResponseWriter, r *http.Request) {
 		case nil:
 			status = http.StatusOK
 			response = updated
+		default:
+			log.Printf("deposit: %v", err)
+			status = http.StatusInternalServerError
+			response = map[string]string{"error": "internal server error"}
 		}
 	}
 
@@ -128,7 +140,7 @@ func (h *Accounts) Transfer(w http.ResponseWriter, r *http.Request) {
 	if decoder.Decode(&input) != nil || decoder.Decode(&extra) != io.EOF {
 		response = map[string]string{"error": "expected a JSON object with integer from_account_id, to_account_id and amount_cents"}
 	} else {
-		from, to, err := h.store.Transfer(input.FromAccountID, input.ToAccountID, input.AmountCents)
+		from, to, err := h.store.Transfer(r.Context(), input.FromAccountID, input.ToAccountID, input.AmountCents)
 		switch err {
 		case nil:
 			status = http.StatusOK
@@ -144,6 +156,10 @@ func (h *Accounts) Transfer(w http.ResponseWriter, r *http.Request) {
 		case store.ErrBalanceOverflow:
 			status = http.StatusConflict
 			response = map[string]string{"error": "transfer would exceed the destination's maximum balance"}
+		default:
+			log.Printf("transfer: %v", err)
+			status = http.StatusInternalServerError
+			response = map[string]string{"error": "internal server error"}
 		}
 	}
 
