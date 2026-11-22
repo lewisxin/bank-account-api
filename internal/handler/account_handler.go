@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -74,7 +74,7 @@ func (h *Accounts) Create(w http.ResponseWriter, r *http.Request) {
 	default:
 		created, err := h.store.AddAccount(r.Context(), input.InitialBalanceCents)
 		if err != nil {
-			log.Printf("create account: %v", err)
+			slog.ErrorContext(r.Context(), "create account failed", "error", err)
 			status = http.StatusInternalServerError
 			response = map[string]string{"error": "internal server error"}
 		} else {
@@ -86,7 +86,7 @@ func (h *Accounts) Create(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(response); err != nil {
-		log.Printf("write account response: %v", err)
+		slog.ErrorContext(r.Context(), "write create account response failed", "error", err)
 	}
 }
 
@@ -108,7 +108,7 @@ func (h *Accounts) Get(w http.ResponseWriter, r *http.Request) {
 			status = http.StatusNotFound
 			response = map[string]string{"error": err.Error()}
 		default:
-			log.Printf("get account: %v", err)
+			slog.ErrorContext(r.Context(), "get account failed", "error", err)
 			status = http.StatusInternalServerError
 			response = map[string]string{"error": "internal server error"}
 		}
@@ -117,7 +117,7 @@ func (h *Accounts) Get(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(response); err != nil {
-		log.Printf("write get account response: %v", err)
+		slog.ErrorContext(r.Context(), "write get account response failed", "error", err)
 	}
 }
 
@@ -148,7 +148,7 @@ func (h *Accounts) Deposit(w http.ResponseWriter, r *http.Request) {
 			status = http.StatusOK
 			response = updated
 		default:
-			log.Printf("deposit: %v", err)
+			slog.ErrorContext(r.Context(), "deposit failed", "error", err)
 			status = http.StatusInternalServerError
 			response = map[string]string{"error": "internal server error"}
 		}
@@ -157,7 +157,7 @@ func (h *Accounts) Deposit(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(response); err != nil {
-		log.Printf("write deposit response: %v", err)
+		slog.ErrorContext(r.Context(), "write deposit response failed", "error", err)
 	}
 }
 
@@ -189,7 +189,7 @@ func (h *Accounts) Transfer(w http.ResponseWriter, r *http.Request) {
 			status = http.StatusConflict
 			response = map[string]string{"error": "transfer would exceed the destination's maximum balance"}
 		default:
-			log.Printf("transfer: %v", err)
+			slog.ErrorContext(r.Context(), "transfer failed", "error", err)
 			status = http.StatusInternalServerError
 			response = map[string]string{"error": "internal server error"}
 		}
@@ -198,6 +198,6 @@ func (h *Accounts) Transfer(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(response); err != nil {
-		log.Printf("write transfer response: %v", err)
+		slog.ErrorContext(r.Context(), "write transfer response failed", "error", err)
 	}
 }

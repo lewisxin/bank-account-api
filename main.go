@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"time"
@@ -12,14 +12,17 @@ import (
 	_ "github.com/lib/pq"
 
 	"github.com/lewisxin/bank-account-api/internal/handler"
+	"github.com/lewisxin/bank-account-api/internal/middleware"
 	"github.com/lewisxin/bank-account-api/internal/store"
 )
 
 const localDatabaseURL = "postgres://bank:bank@127.0.0.1:5432/bank?sslmode=disable"
 
 func main() {
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
 	if err := run(); err != nil {
-		log.Fatal(err)
+		slog.Error("server stopped", "error", err)
+		os.Exit(1)
 	}
 }
 
@@ -44,7 +47,9 @@ func run() error {
 	if addr == "" {
 		addr = "127.0.0.1:8080"
 	}
-	return http.ListenAndServe(addr, newMux(store.NewPostgresAccounts(db)))
+	slog.Info("starting HTTP server", "addr", addr)
+	routes := newMux(store.NewPostgresAccounts(db))
+	return http.ListenAndServe(addr, middleware.RequestLogger(slog.Default(), routes))
 }
 
 func newMux(accountStore handler.AccountStore) *http.ServeMux {
