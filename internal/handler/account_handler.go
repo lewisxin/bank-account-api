@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/lewisxin/bank-account-api/internal/middleware"
 	"github.com/lewisxin/bank-account-api/internal/store"
 )
 
@@ -78,6 +79,7 @@ func (h *Accounts) Create(w http.ResponseWriter, r *http.Request) {
 			status = http.StatusInternalServerError
 			response = map[string]string{"error": "internal server error"}
 		} else {
+			middleware.AddRequestLogAttrs(r.Context(), slog.Int64("account_id", created.ID))
 			status = http.StatusCreated
 			response = created
 		}
@@ -99,6 +101,7 @@ func (h *Accounts) Get(w http.ResponseWriter, r *http.Request) {
 		status = http.StatusBadRequest
 		response = map[string]string{"error": "account ID must be a positive integer"}
 	} else {
+		middleware.AddRequestLogAttrs(r.Context(), slog.Int64("account_id", id))
 		account, err := h.store.GetAccount(r.Context(), id)
 		switch err {
 		case nil:
@@ -123,6 +126,10 @@ func (h *Accounts) Get(w http.ResponseWriter, r *http.Request) {
 
 func (h *Accounts) Deposit(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	validID := err == nil && id > 0
+	if validID {
+		middleware.AddRequestLogAttrs(r.Context(), slog.Int64("account_id", id))
+	}
 	var input depositRequest
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
@@ -131,7 +138,7 @@ func (h *Accounts) Deposit(w http.ResponseWriter, r *http.Request) {
 	status := http.StatusBadRequest
 	var response any
 	switch {
-	case err != nil || id <= 0:
+	case !validID:
 		response = map[string]string{"error": "account ID must be a positive integer"}
 	case decoder.Decode(&input) != nil || input.AmountCents <= 0 || decoder.Decode(&extra) != io.EOF:
 		response = map[string]string{"error": "expected a JSON object with a positive integer amount_cents"}
@@ -172,6 +179,10 @@ func (h *Accounts) Transfer(w http.ResponseWriter, r *http.Request) {
 	if decoder.Decode(&input) != nil || decoder.Decode(&extra) != io.EOF {
 		response = map[string]string{"error": "expected a JSON object with integer from_account_id, to_account_id and amount_cents"}
 	} else {
+		middleware.AddRequestLogAttrs(r.Context(),
+			slog.Int64("from_account_id", input.FromAccountID),
+			slog.Int64("to_account_id", input.ToAccountID),
+		)
 		from, to, err := h.store.Transfer(r.Context(), input.FromAccountID, input.ToAccountID, input.AmountCents)
 		switch err {
 		case nil:

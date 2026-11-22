@@ -70,3 +70,34 @@ func TestRequestLoggerRecordsHTTPStatus(t *testing.T) {
 		})
 	}
 }
+
+func TestRequestLoggerKeepsAttributesPerRequest(t *testing.T) {
+	var output bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&output, nil))
+	handler := RequestLogger(logger, http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/account/42" {
+			AddRequestLogAttrs(r.Context(), slog.Int64("account_id", 42))
+		}
+	}))
+
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/account/42", nil))
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/missing", nil))
+
+	type logEntry struct {
+		AccountID *int64 `json:"account_id"`
+	}
+	var first, second logEntry
+	decoder := json.NewDecoder(&output)
+	if err := decoder.Decode(&first); err != nil {
+		t.Fatalf("decode first request log: %v", err)
+	}
+	if err := decoder.Decode(&second); err != nil {
+		t.Fatalf("decode second request log: %v", err)
+	}
+	if first.AccountID == nil || *first.AccountID != 42 {
+		t.Error("first request should log account_id 42")
+	}
+	if second.AccountID != nil {
+		t.Errorf("second request unexpectedly logged account_id %d", *second.AccountID)
+	}
+}
