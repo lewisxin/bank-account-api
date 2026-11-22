@@ -13,6 +13,8 @@ make up
 
 This builds the API image, starts PostgreSQL and waits for it to accept connections, applies pending migrations, and starts the server at `http://127.0.0.1:8080`.
 
+The [OpenAPI specification](docs/openapi.yml) documents the account, deposit, and transfer endpoints and their responses.
+
 ## Build the Image
 
 ```sh

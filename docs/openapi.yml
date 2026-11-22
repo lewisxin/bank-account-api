@@ -1,0 +1,239 @@
+openapi: 3.1.1
+info:
+  title: Bank Account API
+  version: 0.1.0
+  description: |
+    Create accounts, deposit money, and transfer money between accounts.
+    All amounts and balances are expressed in whole cents.
+servers:
+  - url: http://127.0.0.1:8080
+    description: Local server
+paths:
+  /account:
+    post:
+      operationId: createAccount
+      summary: Create an account
+      requestBody:
+        description: Omit the body or the initial balance to start with zero cents.
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                initial_balance_cents:
+                  type: integer
+                  format: int64
+                  minimum: 0
+                  maximum: 10000
+                  default: 0
+            example:
+              initial_balance_cents: 1000
+      responses:
+        '201':
+          description: The created account and its starting balance.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+              example:
+                id: 1
+                balance_cents: 1000
+        '400':
+          description: Invalid JSON body or initial balance.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                invalidBody:
+                  value:
+                    error: expected a JSON object with an optional integer initial_balance_cents
+                invalidBalance:
+                  value:
+                    error: initial_balance_cents must be an integer between 0 and 10000
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /account/{id}/deposit:
+    post:
+      operationId: deposit
+      summary: Deposit money into an account
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The ID returned when the account was created.
+          schema:
+            $ref: '#/components/schemas/AccountID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [amount_cents]
+              properties:
+                amount_cents:
+                  $ref: '#/components/schemas/PositiveCents'
+            example:
+              amount_cents: 500
+      responses:
+        '200':
+          description: The account and its balance after the deposit.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+              example:
+                id: 1
+                balance_cents: 1500
+        '400':
+          description: Invalid account ID, JSON body, or deposit amount.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                invalidID:
+                  value:
+                    error: account ID must be a positive integer
+                invalidAmount:
+                  value:
+                    error: expected a JSON object with a positive integer amount_cents
+        '404':
+          $ref: '#/components/responses/AccountNotFound'
+        '409':
+          description: The deposit would exceed the maximum account balance.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: deposit would exceed the maximum balance
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /account/transfer:
+    post:
+      operationId: transfer
+      summary: Transfer money between two accounts
+      description: Both balances are updated atomically. The source and destination account IDs must be different.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [from_account_id, to_account_id, amount_cents]
+              properties:
+                from_account_id:
+                  $ref: '#/components/schemas/AccountID'
+                to_account_id:
+                  $ref: '#/components/schemas/AccountID'
+                amount_cents:
+                  $ref: '#/components/schemas/PositiveCents'
+            example:
+              from_account_id: 1
+              to_account_id: 2
+              amount_cents: 600
+      responses:
+        '200':
+          description: Both accounts and their balances after the transfer.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [from_account, to_account]
+                properties:
+                  from_account:
+                    $ref: '#/components/schemas/Account'
+                  to_account:
+                    $ref: '#/components/schemas/Account'
+              example:
+                from_account:
+                  id: 1
+                  balance_cents: 900
+                to_account:
+                  id: 2
+                  balance_cents: 800
+        '400':
+          description: Invalid JSON body, account IDs, or transfer amount.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                invalidBody:
+                  value:
+                    error: expected a JSON object with integer from_account_id, to_account_id and amount_cents
+                invalidAccounts:
+                  value:
+                    error: from_account_id and to_account_id must be distinct positive integers
+                invalidAmount:
+                  value:
+                    error: amount_cents must be a positive integer
+        '404':
+          $ref: '#/components/responses/AccountNotFound'
+        '409':
+          description: The source has insufficient funds or the destination would exceed its maximum balance.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                insufficientFunds:
+                  value:
+                    error: insufficient funds
+                destinationOverflow:
+                  value:
+                    error: transfer would exceed the destination's maximum balance
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+components:
+  schemas:
+    AccountID:
+      type: integer
+      format: int64
+      minimum: 1
+      maximum: 9223372036854775807
+    PositiveCents:
+      type: integer
+      format: int64
+      minimum: 1
+      maximum: 9223372036854775807
+    Account:
+      type: object
+      required: [id, balance_cents]
+      properties:
+        id:
+          $ref: '#/components/schemas/AccountID'
+        balance_cents:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9223372036854775807
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+  responses:
+    AccountNotFound:
+      description: A requested account does not exist.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: account not found
+    InternalServerError:
+      description: The server could not complete the request.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: internal server error
