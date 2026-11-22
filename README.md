@@ -76,6 +76,18 @@ make test-integration
 
 Compose starts the dedicated `test-db` service if needed and waits for it to be ready. The `integration` build tag includes the PostgreSQL tests alongside the unit tests. The PostgreSQL tests create temporary schemas in `bank_test`, apply their migrations, and drop the schemas during cleanup.
 
+### End-to-End Tests
+
+With Docker Compose 2.24.4 or newer, `curl`, and the Postman CLI installed, run this from the project root.
+
+```sh
+make test-e2e
+```
+
+Each run builds the API image, starts a fresh PostgreSQL container, applies migrations, and starts the server on a temporary local port. It runs the [account workflow collection](tests/account_e2e.postman_collection.json), then removes the E2E containers and their database data, even if a test fails. Run the same command again for a clean database.
+
+The concurrent cases use one-cent deposits to read back the final balances through the API and account for those deposits in the assertions.
+
 ## Functional Requirements
 
 - R1: Create an account with or without an initial balance

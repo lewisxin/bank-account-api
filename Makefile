@@ -1,9 +1,10 @@
 GO ?= go
 COMPOSE ?= docker compose
 MIGRATE ?= migrate
+POSTMAN ?= postman
 export MIGRATION_NAME
 
-.PHONY: build run docker-build docker-run up db-up test test-integration migrate-create migrate-up migrate-down
+.PHONY: build run docker-build docker-run up db-up test test-integration test-e2e migrate-create migrate-up migrate-down
 
 build:
 	$(GO) build -o bank-account-api .
@@ -31,6 +32,9 @@ test:
 
 test-integration:
 	$(COMPOSE) run --rm -T test
+
+test-e2e:
+	sh e2e/run-e2e.sh "$(COMPOSE)" "$(POSTMAN)"
 
 migrate-create:
 	@test -n "$$MIGRATION_NAME" || { printf '%s\n' 'Usage: make migrate-create MIGRATION_NAME=add_account_status' >&2; exit 1; }

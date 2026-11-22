@@ -1,0 +1,550 @@
+{
+  "info": {
+    "name": "Bank Account API E2E",
+    "description": "Run against a disposable database. The collection creates fresh accounts and changes their balances.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8080",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Account workflow",
+      "item": [
+        {
+          "name": "Open an account without a balance",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/account",
+            "description": "Send an empty request body. Expect HTTP 201 and a new account with a balance of 0 cents."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Opening an account with an empty body returns HTTP 201 and a balance of 0 cents\", () => {",
+                  "    pm.response.to.have.status(201);",
+                  "    const account = pm.response.json();",
+                  "    pm.expect(Number.isSafeInteger(account.id) && account.id > 0).to.equal(true);",
+                  "    pm.expect(account.balance_cents).to.equal(0);",
+                  "    pm.variables.set(\"emptyAccountId\", String(account.id));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Open an account with an initial balance",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/account",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"initial_balance_cents\": 1000\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Open an account with an initial balance of 1000 cents. Expect HTTP 201 and a balance of 1000 cents."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Opening an account with 1000 cents returns HTTP 201 and a balance of 1000 cents\", () => {",
+                  "    pm.response.to.have.status(201);",
+                  "    const account = pm.response.json();",
+                  "    pm.expect(Number.isSafeInteger(account.id) && account.id > 0).to.equal(true);",
+                  "    pm.expect(account.balance_cents).to.equal(1000);",
+                  "    pm.variables.set(\"fundedAccountId\", String(account.id));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reject a negative initial balance",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/account",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"initial_balance_cents\": -100\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Try to open an account with an initial balance of -100 cents. Expect HTTP 400 and the error for a balance outside the allowed range of 0 to 10000 cents."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"An initial balance of -100 cents returns HTTP 400 with the 0 to 10000 cents validation error\", () => {",
+                  "    pm.response.to.have.status(400);",
+                  "    pm.expect(pm.response.json()).to.deep.equal({ error: \"initial_balance_cents must be an integer between 0 and 10000\" });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Deposit money",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/account/{{fundedAccountId}}/deposit",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount_cents\": 500\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Deposit 500 cents into the account with 1000 cents. Expect HTTP 200 and a new balance of 1500 cents."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Depositing 500 cents into an account with 1000 cents returns HTTP 200 and a balance of 1500 cents\", () => {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json()).to.deep.equal({",
+                  "        id: Number(pm.variables.get(\"fundedAccountId\")),",
+                  "        balance_cents: 1500",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reject a negative deposit",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/account/{{fundedAccountId}}/deposit",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount_cents\": -100\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Try to deposit -100 cents into the account with 1500 cents. Expect HTTP 400 and the error requiring a positive deposit amount."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Depositing -100 cents returns HTTP 400 with the positive deposit amount error\", () => {",
+                  "    pm.response.to.have.status(400);",
+                  "    pm.expect(pm.response.json()).to.deep.equal({ error: \"expected a JSON object with a positive integer amount_cents\" });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Transfer with sufficient funds",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/account/transfer",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"from_account_id\": {{fundedAccountId}},\n  \"to_account_id\": {{emptyAccountId}},\n  \"amount_cents\": 600\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Transfer 600 cents from the account with 1500 cents to the account with 0 cents. Expect HTTP 200 with source and destination balances of 900 and 600 cents, respectively."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Moving 600 cents from a source with 1500 cents to a destination with 0 cents returns HTTP 200 and balances of 900 and 600 cents\", () => {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json()).to.deep.equal({",
+                  "        from_account: { id: Number(pm.variables.get(\"fundedAccountId\")), balance_cents: 900 },",
+                  "        to_account: { id: Number(pm.variables.get(\"emptyAccountId\")), balance_cents: 600 }",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reject a transfer with insufficient funds",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/account/transfer",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"from_account_id\": {{fundedAccountId}},\n  \"to_account_id\": {{emptyAccountId}},\n  \"amount_cents\": 901\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Try to transfer 901 cents from the account with 900 cents. Expect HTTP 409 with an insufficient funds error."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Transferring 901 cents from a balance of 900 cents returns HTTP 409 for insufficient funds\", () => {",
+                  "    pm.response.to.have.status(409);",
+                  "    pm.expect(pm.response.json()).to.deep.equal({ error: \"insufficient funds\" });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reject a transfer to the same account",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/account/transfer",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"from_account_id\": {{fundedAccountId}},\n  \"to_account_id\": {{fundedAccountId}},\n  \"amount_cents\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Try to transfer 1 cent from an account to itself. Expect HTTP 400 with the error requiring distinct account IDs."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Transferring 1 cent to the same account returns HTTP 400 with the distinct account IDs error\", () => {",
+                  "    pm.response.to.have.status(400);",
+                  "    pm.expect(pm.response.json()).to.deep.equal({ error: \"from_account_id and to_account_id must be distinct positive integers\" });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Concurrent transfers",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const scenarios = {",
+              "    oppositeDirections: {",
+              "        initialBalances: { A: 1000, B: 1000 },",
+              "        transfers: [",
+              "            { from: \"A\", to: \"B\", amountCents: 300 },",
+              "            { from: \"B\", to: \"A\", amountCents: 200 }",
+              "        ],",
+              "        outcomes: { \"200,200\": { A: 900, B: 1100 } }",
+              "    },",
+              "    sameSource: {",
+              "        initialBalances: { A: 1000, B: 0, C: 0 },",
+              "        transfers: [",
+              "            { from: \"A\", to: \"B\", amountCents: 300 },",
+              "            { from: \"A\", to: \"C\", amountCents: 200 }",
+              "        ],",
+              "        outcomes: { \"200,200\": { A: 500, B: 300, C: 200 } }",
+              "    },",
+              "    chained: {",
+              "        initialBalances: { A: 1000, B: 0, C: 0 },",
+              "        transfers: [",
+              "            { from: \"A\", to: \"B\", amountCents: 600 },",
+              "            { from: \"B\", to: \"C\", amountCents: 600 }",
+              "        ],",
+              "        outcomes: {",
+              "            \"200,200\": { A: 400, B: 0, C: 600 },",
+              "            \"200,409\": { A: 400, B: 600, C: 0 }",
+              "        }",
+              "    }",
+              "};",
+              "",
+              "function post(path, body) {",
+              "    return pm.sendRequest({",
+              "        url: pm.variables.get(\"baseUrl\") + path,",
+              "        method: \"POST\",",
+              "        header: { \"Content-Type\": \"application/json\" },",
+              "        body: { mode: \"raw\", raw: JSON.stringify(body) }",
+              "    });",
+              "}",
+              "",
+              "function formatBalances(balances) {",
+              "    return Object.entries(balances).map(([account, cents]) => account + \" = \" + cents).join(\", \");",
+              "}",
+              "",
+              "function formatTransfer({ from, to, amountCents }) {",
+              "    return from + \" -> \" + to + \" (\" + amountCents + \" cents)\";",
+              "}",
+              "",
+              "const scenario = scenarios[pm.variables.get(\"transferScenario\")];",
+              "const transferSummary = scenario.transfers.map(formatTransfer).join(\" and \");",
+              "const accounts = {};",
+              "for (const [label, initialBalance] of Object.entries(scenario.initialBalances)) {",
+              "    const response = label === \"A\"",
+              "        ? pm.response",
+              "        : await post(\"/account\", { initial_balance_cents: initialBalance });",
+              "    pm.expect(response.code, \"create account \" + label).to.equal(201);",
+              "    const account = response.json();",
+              "    pm.expect(Number.isSafeInteger(account.id) && account.id > 0, \"account ID for \" + label).to.equal(true);",
+              "    accounts[label] = account;",
+              "}",
+              "pm.test(\"Starting balances in cents are \" + formatBalances(scenario.initialBalances) + \" and the account IDs are distinct\", () => {",
+              "    const ids = Object.values(accounts).map(account => account.id);",
+              "    pm.expect(new Set(ids).size).to.equal(ids.length);",
+              "    for (const [label, initialBalance] of Object.entries(scenario.initialBalances)) {",
+              "        pm.expect(accounts[label].balance_cents, \"starting balance for \" + label).to.equal(initialBalance);",
+              "    }",
+              "});",
+              "",
+              "// Start both requests before waiting for either response.",
+              "const transferResponses = await Promise.all(scenario.transfers.map(transfer =>",
+              "    post(\"/account/transfer\", {",
+              "        from_account_id: accounts[transfer.from].id,",
+              "        to_account_id: accounts[transfer.to].id,",
+              "        amount_cents: transfer.amountCents",
+              "    })",
+              "));",
+              "const statuses = transferResponses.map(response => response.code).join(\",\");",
+              "const expectedBalances = scenario.outcomes[statuses];",
+              "const allowedStatuses = Object.keys(scenario.outcomes);",
+              "const expectedStatuses = allowedStatuses.map(pair => pair.replace(\",\", \"/\")).join(\" or \");",
+              "pm.test(\"Concurrent transfers \" + transferSummary + \" return HTTP \" + expectedStatuses, () => {",
+              "    pm.expect(allowedStatuses).to.include(statuses);",
+              "});",
+              "",
+              "if (expectedBalances) {",
+              "    transferResponses.forEach((response, index) => {",
+              "        const transfer = scenario.transfers[index];",
+              "        const { from, to } = transfer;",
+              "        const expectedResponse = response.code === 409",
+              "            ? \"HTTP 409 for insufficient funds\"",
+              "            : \"HTTP 200 with the source and destination IDs\";",
+              "        pm.test(formatTransfer(transfer) + \" returns \" + expectedResponse, () => {",
+              "            const body = response.json();",
+              "            if (response.code === 409) {",
+              "                pm.expect(body).to.deep.equal({ error: \"insufficient funds\" });",
+              "            } else {",
+              "                pm.expect(body.from_account.id).to.equal(accounts[from].id);",
+              "                pm.expect(body.to_account.id).to.equal(accounts[to].id);",
+              "            }",
+              "        });",
+              "    });",
+              "",
+              "    // A one-cent deposit returns the stored balance plus the deposit.",
+              "    const labels = Object.keys(accounts);",
+              "    const balanceResponses = await Promise.all(labels.map(label =>",
+              "        post(\"/account/\" + accounts[label].id + \"/deposit\", { amount_cents: 1 })",
+              "    ));",
+              "    const expected = formatBalances(expectedBalances);",
+              "    pm.test(\"After HTTP \" + statuses.replace(\",\", \"/\") + \", persisted balances are \" + expected + \" cents\", () => {",
+              "        const balances = {};",
+              "        balanceResponses.forEach((response, index) => {",
+              "            const label = labels[index];",
+              "            pm.expect(response.code, \"read balance for \" + label).to.equal(200);",
+              "            const account = response.json();",
+              "            pm.expect(account.id).to.equal(accounts[label].id);",
+              "            balances[label] = account.balance_cents - 1;",
+              "        });",
+              "        pm.expect(balances, \"persisted balances in cents\").to.deep.equal(expectedBalances);",
+              "    });",
+              "}"
+            ]
+          }
+        }
+      ],
+      "item": [
+        {
+          "name": "Concurrent transfers A -> B and B -> A",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/account",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"initial_balance_cents\": 1000\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Start with A at 1000 cents and B at 1000 cents. Send 300 cents from A to B and 200 cents from B to A concurrently. Expect HTTP 200 from both transfers and final balances of 900 cents for A and 1100 cents for B."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.variables.set(\"transferScenario\", \"oppositeDirections\");"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Concurrent transfers A -> B and A -> C",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/account",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"initial_balance_cents\": 1000\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Start with A at 1000 cents, B at 0 cents, and C at 0 cents. Send 300 cents from A to B and 200 cents from A to C concurrently. Expect HTTP 200 from both transfers and final balances of 500 cents for A, 300 cents for B, and 200 cents for C."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.variables.set(\"transferScenario\", \"sameSource\");"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Concurrent transfers A -> B and B -> C",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/account",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"initial_balance_cents\": 1000\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Start with A at 1000 cents, B at 0 cents, and C at 0 cents. Send 600 cents from A to B and 600 cents from B to C concurrently.\n\n- If A funds B first, expect HTTP 200 from both transfers and final balances of 400 cents for A, 0 cents for B, and 600 cents for C.\n- If B tries to send first, expect HTTP 409 for insufficient funds from B to C and HTTP 200 from A to B. The final balances are 400 cents for A, 600 cents for B, and 0 cents for C."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.variables.set(\"transferScenario\", \"chained\");"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
