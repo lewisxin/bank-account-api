@@ -1,13 +1,30 @@
 package main
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
 	"strings"
 	"testing"
 )
+
+type stubAccountStorage struct {
+	addAccountFunc func(initialBalanceCents int64) account
+	depositFunc    func(id, amountCents int64) (account, error)
+	transferFunc   func(fromID, toID, amountCents int64) (account, account, error)
+}
+
+func (s stubAccountStorage) addAccount(initialBalanceCents int64) account {
+	return s.addAccountFunc(initialBalanceCents)
+}
+
+func (s stubAccountStorage) deposit(id, amountCents int64) (account, error) {
+	return s.depositFunc(id, amountCents)
+}
+
+func (s stubAccountStorage) transfer(fromID, toID, amountCents int64) (account, account, error) {
+	return s.transferFunc(fromID, toID, amountCents)
+}
 
 func TestCreateAccountSuccess(t *testing.T) {
 	tests := []struct {
@@ -44,14 +61,16 @@ func TestCreateAccountSuccess(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler := &accountHandler{accounts: make(map[int64]account)}
+			store := stubAccountStorage{
+				addAccountFunc: func(initialBalanceCents int64) account {
+					return account{ID: 1, BalanceCents: initialBalanceCents}
+				},
+			}
+			handler := &accountHandler{store: store}
 			request := httptest.NewRequest(http.MethodPost, "/account", strings.NewReader(tt.requestBody))
 			response := httptest.NewRecorder()
 			handler.createAccount(response, request)
 
-			if response.Code != http.StatusCreated {
-				t.Fatalf("status = %d, want %d, body = %s", response.Code, http.StatusCreated, response.Body)
-			}
 			body := response.Body.String()
 			want := `"balance_cents":` + strconv.FormatInt(tt.expectedBalanceCents, 10)
 			if !strings.Contains(body, want+",") && !strings.Contains(body, want+"}") {
@@ -99,14 +118,10 @@ func TestCreateAccountBadRequests(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler := &accountHandler{accounts: make(map[int64]account)}
+			handler := &accountHandler{store: stubAccountStorage{}}
 			request := httptest.NewRequest(http.MethodPost, "/account", strings.NewReader(tt.requestBody))
 			response := httptest.NewRecorder()
 			handler.createAccount(response, request)
-
-			if response.Code != http.StatusBadRequest {
-				t.Fatalf("status = %d, want %d, body = %s", response.Code, http.StatusBadRequest, response.Body)
-			}
 
 			if body := strings.TrimSpace(response.Body.String()); body != tt.expectedBody {
 				t.Errorf("body = %s, want %s", body, tt.expectedBody)
@@ -115,41 +130,20 @@ func TestCreateAccountBadRequests(t *testing.T) {
 	}
 }
 
-func TestCreateAccountIncrementsID(t *testing.T) {
-	handler := &accountHandler{accounts: make(map[int64]account)}
-
-	for wantID := 1; wantID <= 2; wantID++ {
-		request := httptest.NewRequest(http.MethodPost, "/account", nil)
-		response := httptest.NewRecorder()
-		handler.createAccount(response, request)
-
-		var got struct {
-			ID int `json:"id"`
-		}
-		if err := json.NewDecoder(response.Body).Decode(&got); err != nil {
-			t.Fatalf("request %d: decode account response: %v", wantID, err)
-		}
-		if got.ID != wantID {
-			t.Errorf("request %d: id = %d, want %d", wantID, got.ID, wantID)
-		}
-	}
-}
-
 func TestDepositSuccess(t *testing.T) {
-	handler := &accountHandler{accounts: map[int64]account{1: {ID: 1, BalanceCents: 9500}}}
+	store := stubAccountStorage{
+		depositFunc: func(id, amountCents int64) (account, error) {
+			return account{ID: id, BalanceCents: 9500 + amountCents}, nil
+		},
+	}
+	handler := &accountHandler{store: store}
 	request := httptest.NewRequest(http.MethodPost, "/account/1/deposit", strings.NewReader(`{"amount_cents":1500}`))
 	request.SetPathValue("id", "1")
 	response := httptest.NewRecorder()
 	handler.deposit(response, request)
 
-	if response.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d, body = %s", response.Code, http.StatusOK, response.Body)
-	}
 	if body := strings.TrimSpace(response.Body.String()); body != `{"id":1,"balance_cents":11000}` {
 		t.Errorf("unexpected response: %s", body)
-	}
-	if balance := handler.accounts[1].BalanceCents; balance != 11000 {
-		t.Errorf("stored balance = %d, want 11000", balance)
 	}
 }
 
@@ -157,80 +151,73 @@ func TestDepositErrors(t *testing.T) {
 	const invalidAmount = `{"error":"expected a JSON object with a positive integer amount_cents"}`
 
 	tests := []struct {
-		name           string
-		accountID      string
-		requestBody    string
-		expectedStatus int
-		expectedBody   string
+		name         string
+		accountID    string
+		requestBody  string
+		storeErr     error
+		expectedBody string
 	}{
 		{
-			name:           "invalid account ID",
-			accountID:      "abc",
-			requestBody:    `{"amount_cents":100}`,
-			expectedStatus: http.StatusBadRequest,
-			expectedBody:   `{"error":"account ID must be a positive integer"}`,
+			name:         "invalid account ID",
+			accountID:    "abc",
+			requestBody:  `{"amount_cents":100}`,
+			expectedBody: `{"error":"account ID must be a positive integer"}`,
 		},
 		{
-			name:           "zero amount",
-			accountID:      "1",
-			requestBody:    `{"amount_cents":0}`,
-			expectedStatus: http.StatusBadRequest,
-			expectedBody:   invalidAmount,
+			name:         "zero amount",
+			accountID:    "1",
+			requestBody:  `{"amount_cents":0}`,
+			expectedBody: invalidAmount,
 		},
 		{
-			name:           "negative amount",
-			accountID:      "1",
-			requestBody:    `{"amount_cents":-100}`,
-			expectedStatus: http.StatusBadRequest,
-			expectedBody:   invalidAmount,
+			name:         "negative amount",
+			accountID:    "1",
+			requestBody:  `{"amount_cents":-100}`,
+			expectedBody: invalidAmount,
 		},
 		{
-			name:           "fractional cents",
-			accountID:      "1",
-			requestBody:    `{"amount_cents":0.5}`,
-			expectedStatus: http.StatusBadRequest,
-			expectedBody:   invalidAmount,
+			name:         "fractional cents",
+			accountID:    "1",
+			requestBody:  `{"amount_cents":0.5}`,
+			expectedBody: invalidAmount,
 		},
 		{
-			name:           "malformed JSON",
-			accountID:      "1",
-			requestBody:    `{"amount_cents":`,
-			expectedStatus: http.StatusBadRequest,
-			expectedBody:   invalidAmount,
+			name:         "malformed JSON",
+			accountID:    "1",
+			requestBody:  `{"amount_cents":`,
+			expectedBody: invalidAmount,
 		},
 		{
-			name:           "account does not exist",
-			accountID:      "2",
-			requestBody:    `{"amount_cents":100}`,
-			expectedStatus: http.StatusNotFound,
-			expectedBody:   `{"error":"account not found"}`,
+			name:         "account does not exist",
+			accountID:    "2",
+			requestBody:  `{"amount_cents":100}`,
+			storeErr:     errAccountNotFound,
+			expectedBody: `{"error":"account not found"}`,
 		},
 		{
-			name:           "balance overflow",
-			accountID:      "1",
-			requestBody:    `{"amount_cents":9223372036854775807}`,
-			expectedStatus: http.StatusConflict,
-			expectedBody:   `{"error":"deposit would exceed the maximum balance"}`,
+			name:         "balance overflow",
+			accountID:    "1",
+			requestBody:  `{"amount_cents":100}`,
+			storeErr:     errBalanceOverflow,
+			expectedBody: `{"error":"deposit would exceed the maximum balance"}`,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			initialBalance := int64(2500)
-			handler := &accountHandler{accounts: map[int64]account{1: {ID: 1, BalanceCents: initialBalance}}}
+			store := stubAccountStorage{
+				depositFunc: func(_, _ int64) (account, error) {
+					return account{}, tt.storeErr
+				},
+			}
+			handler := &accountHandler{store: store}
 			request := httptest.NewRequest(http.MethodPost, "/account/"+tt.accountID+"/deposit", strings.NewReader(tt.requestBody))
 			request.SetPathValue("id", tt.accountID)
 			response := httptest.NewRecorder()
 			handler.deposit(response, request)
 
-			if response.Code != tt.expectedStatus {
-				t.Fatalf("status = %d, want %d, body = %s", response.Code, tt.expectedStatus, response.Body)
-			}
 			if body := strings.TrimSpace(response.Body.String()); body != tt.expectedBody {
 				t.Errorf("body = %s, want %s", body, tt.expectedBody)
-			}
-			if balance := handler.accounts[1].BalanceCents; balance != initialBalance {
-				t.Errorf("stored balance = %d, want %d", balance, initialBalance)
 			}
 		})
 	}

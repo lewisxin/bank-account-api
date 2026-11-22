@@ -6,18 +6,11 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"math"
 	"net/http"
 	"strconv"
-	"sync"
 )
 
 const maxInitialBalanceCents = 10_000
-
-type account struct {
-	ID           int64 `json:"id"`
-	BalanceCents int64 `json:"balance_cents"`
-}
 
 type createAccountRequest struct {
 	InitialBalanceCents int64 `json:"initial_balance_cents"`
@@ -28,9 +21,7 @@ type depositRequest struct {
 }
 
 type accountHandler struct {
-	mu       sync.Mutex
-	nextID   int64
-	accounts map[int64]account
+	store accountStorage
 }
 
 func (h *accountHandler) createAccount(w http.ResponseWriter, r *http.Request) {
@@ -57,7 +48,7 @@ func (h *accountHandler) createAccount(w http.ResponseWriter, r *http.Request) {
 		response = map[string]string{"error": fmt.Sprintf("initial_balance_cents must be an integer between 0 and %d", maxInitialBalanceCents)}
 	default:
 		status = http.StatusCreated
-		response = h.addAccount(input.InitialBalanceCents)
+		response = h.store.addAccount(input.InitialBalanceCents)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -65,16 +56,6 @@ func (h *accountHandler) createAccount(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		log.Printf("write account response: %v", err)
 	}
-}
-
-func (h *accountHandler) addAccount(initialBalanceCents int64) account {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
-	h.nextID++
-	created := account{ID: h.nextID, BalanceCents: initialBalanceCents}
-	h.accounts[created.ID] = created
-	return created
 }
 
 func (h *accountHandler) deposit(w http.ResponseWriter, r *http.Request) {
@@ -92,22 +73,18 @@ func (h *accountHandler) deposit(w http.ResponseWriter, r *http.Request) {
 	case decoder.Decode(&input) != nil || input.AmountCents <= 0 || decoder.Decode(&extra) != io.EOF:
 		response = map[string]string{"error": "expected a JSON object with a positive integer amount_cents"}
 	default:
-		h.mu.Lock()
-		current, exists := h.accounts[id]
-		switch {
-		case !exists:
+		updated, err := h.store.deposit(id, input.AmountCents)
+		switch err {
+		case errAccountNotFound:
 			status = http.StatusNotFound
-			response = map[string]string{"error": "account not found"}
-		case input.AmountCents > math.MaxInt64-current.BalanceCents:
+			response = map[string]string{"error": err.Error()}
+		case errBalanceOverflow:
 			status = http.StatusConflict
 			response = map[string]string{"error": "deposit would exceed the maximum balance"}
-		default:
-			current.BalanceCents += input.AmountCents
-			h.accounts[id] = current
+		case nil:
 			status = http.StatusOK
-			response = current
+			response = updated
 		}
-		h.mu.Unlock()
 	}
 
 	w.Header().Set("Content-Type", "application/json")
