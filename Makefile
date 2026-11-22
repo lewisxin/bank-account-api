@@ -4,30 +4,33 @@ MIGRATE ?= migrate
 POSTMAN ?= postman
 export MIGRATION_NAME
 
-.PHONY: build run docker-build docker-run up db-up test test-integration test-e2e migrate-create migrate-up migrate-down
+.PHONY: build-local build-docker \
+	run-local run-docker run-db run-stack \
+	test-unit test-integration test-e2e \
+	migrate-create migrate-up migrate-down
 
-build:
+build-local:
 	$(GO) build -o bank-account-api .
 
-run:
-	$(GO) run .
-
-docker-build:
+build-docker:
 	$(COMPOSE) build bank-account-api
 
-docker-run:
+run-local:
+	$(GO) run .
+
+run-docker:
 	$(COMPOSE) up -d bank-account-api
 
-up:
-	$(MAKE) docker-build
-	$(MAKE) db-up
-	$(MAKE) migrate-up
-	$(MAKE) docker-run
-
-db-up:
+run-db:
 	$(COMPOSE) up -d --wait db
 
-test:
+run-stack:
+	$(MAKE) build-docker
+	$(MAKE) run-db
+	$(MAKE) migrate-up
+	$(MAKE) run-docker
+
+test-unit:
 	$(GO) test ./...
 
 test-integration:

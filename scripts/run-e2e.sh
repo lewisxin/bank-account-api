@@ -12,7 +12,7 @@ fi
 prepare_test_project e2e "$compose_command"
 export DATABASE_URL=
 
-make up COMPOSE="$test_compose" DATABASE_URL=
+make run-stack COMPOSE="$test_compose" DATABASE_URL=
 address=$($test_compose port bank-account-api 8080)
 
 # The account route answers GET with 405 once the server starts listening.

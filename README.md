@@ -8,17 +8,26 @@ This is a demo project for a small bank account API written in Go.
 With Docker, Docker Compose, and `make` installed, run this from the project root.
 
 ```sh
-make up
+make run-stack
 ```
 
 This builds the API image, starts PostgreSQL and waits for it to accept connections, applies pending migrations, and starts the server at `http://127.0.0.1:8080`.
 
 The [OpenAPI specification](docs/openapi.yml) documents the account, deposit, and transfer endpoints and their responses.
 
+## Server Logs
+
+Use `docker ps` to find the running `bank-account-api` container. Replace `<container_id_or_name>` with its ID or name to follow the server logs.
+
+```sh
+docker ps
+docker logs -f <container_id_or_name>
+```
+
 ## Build the Image
 
 ```sh
-make docker-build
+make build-docker
 ```
 
 ## Database Migrations
@@ -28,7 +37,7 @@ make docker-build
 For database work, run these commands in order. The API and migrations default to the Compose database. Set `DATABASE_URL` to use a different PostgreSQL server reachable from the containers.
 
 ```sh
-make db-up
+make run-db
 make migrate-up
 ```
 
@@ -65,7 +74,7 @@ Rolling back the initial migration drops the `accounts` table and its rows.
 Run the unit tests with Go 1.27.4 or newer. These tests run without PostgreSQL.
 
 ```sh
-make test
+make test-unit
 ```
 
 ### Full Suite With PostgreSQL
